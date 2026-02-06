@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { LayoutDashboard, History, LineChart, Wallet, ArrowUpRight, ArrowDownRight, Clock, Calendar, TrendingUp, TrendingDown, Menu, X, DollarSign, Activity } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { LayoutDashboard, History, LineChart, Wallet, Clock, TrendingUp, Menu, X, DollarSign, Activity, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
-// --- FIREBASE ---
+// --- FIREBASE BAĞLANTISI ---
 import { initializeApp } from "firebase/app";
 import { getFirestore, doc, onSnapshot } from "firebase/firestore";
 
@@ -18,7 +18,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const db = getFirestore(app);
 
-// --- YARDIMCI FONKSIYONLAR ---
+// --- YARDIMCI FONKSİYONLAR ---
 const fmtMoney = (num) => num ? `$${parseFloat(num).toFixed(2)}` : "$0.00";
 const fmtDate = (timestamp) => {
   if(!timestamp) return "-";
@@ -71,7 +71,6 @@ export default function App() {
     const unsubHistory = onSnapshot(doc(db, "dashboard", "history"), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        // Tarihe göre sırala (Yeniden eskiye)
         if(data.deals) setHistory(data.deals.sort((a,b) => b.close_time - a.close_time));
         if(data.transfers) setTransfers(data.transfers.sort((a,b) => b.time - a.time));
       }
@@ -96,7 +95,7 @@ export default function App() {
   const avgWin = wins.length > 0 ? totalProfitVal / wins.length : 0;
   const avgLoss = losses.length > 0 ? totalLossVal / losses.length : 0;
 
-  // Grafik Verileri
+  // Grafik Verileri (Basit PnL Eğrisi)
   const pnlData = history.slice(0, 30).reverse().map(t => ({
     name: new Date(t.close_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
     pnl: t.net_profit
@@ -106,6 +105,24 @@ export default function App() {
     { name: 'Kazanç', value: wins.length, color: '#10b981' },
     { name: 'Kayıp', value: losses.length, color: '#f43f5e' },
   ];
+
+  // Mobil Menü
+  const MobileNav = () => (
+    <div className="md:hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-800 z-50 flex justify-around p-3 pb-6 safe-area-bottom">
+      <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-500'}`}>
+        <LayoutDashboard size={20} />
+        <span className="text-[10px]">Panel</span>
+      </button>
+      <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 ${activeTab === 'history' ? 'text-blue-400' : 'text-slate-500'}`}>
+        <History size={20} />
+        <span className="text-[10px]">Geçmiş</span>
+      </button>
+      <button onClick={() => setActiveTab('analysis')} className={`flex flex-col items-center gap-1 ${activeTab === 'analysis' ? 'text-blue-400' : 'text-slate-500'}`}>
+        <LineChart size={20} />
+        <span className="text-[10px]">Analiz</span>
+      </button>
+    </div>
+  );
 
   // --- RENDER ---
   return (
@@ -149,21 +166,8 @@ export default function App() {
         </div>
       </header>
 
-      {/* MOBILE BOTTOM NAV */}
-      <div className="md:hidden fixed bottom-0 w-full bg-slate-900 border-t border-slate-800 z-50 flex justify-around p-3 pb-6">
-        <button onClick={() => setActiveTab('dashboard')} className={`flex flex-col items-center gap-1 ${activeTab === 'dashboard' ? 'text-blue-400' : 'text-slate-500'}`}>
-          <LayoutDashboard size={20} />
-          <span className="text-[10px]">Panel</span>
-        </button>
-        <button onClick={() => setActiveTab('history')} className={`flex flex-col items-center gap-1 ${activeTab === 'history' ? 'text-blue-400' : 'text-slate-500'}`}>
-          <History size={20} />
-          <span className="text-[10px]">Geçmiş</span>
-        </button>
-        <button onClick={() => setActiveTab('analysis')} className={`flex flex-col items-center gap-1 ${activeTab === 'analysis' ? 'text-blue-400' : 'text-slate-500'}`}>
-          <LineChart size={20} />
-          <span className="text-[10px]">Analiz</span>
-        </button>
-      </div>
+      {/* MOBILE NAV */}
+      <MobileNav />
 
       {/* CONTENT AREA */}
       <main className="pt-24 px-4 max-w-7xl mx-auto space-y-6">
@@ -177,28 +181,6 @@ export default function App() {
               <StatCard title="GÜNLÜK PNL" value={fmtMoney(account.profit)} subValue="Açık Pozisyonlar Dahil" icon={DollarSign} color={account.profit >= 0 ? "emerald" : "rose"} />
               <StatCard title="MARGIN LEVEL" value={`%${parseFloat(account.margin_level).toFixed(0)}`} subValue={`Free: ${fmtMoney(account.free_margin)}`} icon={Activity} color="purple" />
               <StatCard title="AÇIK İŞLEM" value={positions.length} subValue="Aktif Pozisyonlar" icon={Clock} color="amber" />
-            </div>
-
-            {/* Live Chart */}
-            <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
-              <h2 className="text-white font-bold mb-4 flex items-center gap-2"><TrendingUp className="text-emerald-400" size={20} /> Canlı Büyüme (Son İşlemler)</h2>
-              <div className="h-[250px] w-full">
-                <ResponsiveContainer>
-                  <AreaChart data={pnlData}>
-                    <defs>
-                      <linearGradient id="colorPnL" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
-                    <XAxis dataKey="name" hide />
-                    <YAxis stroke="#64748b" tickFormatter={(val) => `$${val}`} />
-                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }} />
-                    <Area type="monotone" dataKey="pnl" stroke="#3b82f6" fill="url(#colorPnL)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
             </div>
 
             {/* Active Positions Table */}
@@ -245,7 +227,9 @@ export default function App() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-700">
-                  {history.map((t, i) => (
+                  {history.length === 0 ? (
+                     <tr><td colSpan="6" className="p-8 text-center">Henüz kapanmış işlem yok.</td></tr>
+                  ) : history.map((t, i) => (
                     <tr key={i} className="hover:bg-slate-700/30 transition-colors">
                       <td className="p-4 font-bold text-white">{t.symbol}</td>
                       <td className="p-4 text-xs whitespace-nowrap">{fmtDate(t.close_time)}</td>
@@ -335,6 +319,3 @@ export default function App() {
     </div>
   );
 }
-
-**Özet:**
-Bu kodları uyguladığında, web siten sıradan bir göstergeden çıkıp, tam teşekküllü, mobil uyumlu, sekmeli ve analiz yeteneği olan profesyonel bir uygulamaya dönüşecek. Telefonunda "Geçmiş" sekmesine basıp anında tüm eski işlemlerini görebileceksin.

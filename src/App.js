@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
-import { LayoutDashboard, History, LineChart, Wallet, Clock, TrendingUp, Menu, X, DollarSign, Activity, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { LayoutDashboard, History, LineChart, Wallet, Clock, TrendingUp, Menu, X, DollarSign, Activity, ArrowUpRight, ArrowDownRight, List } from 'lucide-react';
 
 // --- FIREBASE BAĞLANTISI ---
 import { initializeApp } from "firebase/app";
@@ -53,7 +53,6 @@ const StatCard = ({ title, value, subValue, icon: Icon, color = "blue" }) => {
 
 export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
-  const [isMenuOpen, setIsMenuOpen] = useState(false);
   
   // Data States
   const [account, setAccount] = useState({ balance: 0, equity: 0, margin: 0, profit: 0 });
@@ -64,22 +63,63 @@ export default function App() {
   // Veri Çekme
   useEffect(() => {
     // 1. Hesap
-    const unsubAccount = onSnapshot(doc(db, "dashboard", "account"), (doc) => doc.exists() && setAccount(doc.data()));
+    const unsubAccount = onSnapshot(doc(db, "dashboard", "account"), (doc) => {
+        if(doc.exists()) setAccount(doc.data());
+    });
+    
     // 2. Açık Pozisyonlar
-    const unsubPositions = onSnapshot(doc(db, "dashboard", "positions"), (doc) => doc.exists() && setPositions(doc.data().active || []));
+    const unsubPositions = onSnapshot(doc(db, "dashboard", "positions"), (doc) => {
+        if(doc.exists()) setPositions(doc.data().active || []);
+    });
+    
     // 3. Geçmiş & Transferler
     const unsubHistory = onSnapshot(doc(db, "dashboard", "history"), (doc) => {
       if (doc.exists()) {
         const data = doc.data();
-        if(data.deals) setHistory(data.deals.sort((a,b) => b.close_time - a.close_time));
-        if(data.transfers) setTransfers(data.transfers.sort((a,b) => b.time - a.time));
+        // Veriyi güvenli çek
+        const deals = data.deals || [];
+        const trans = data.transfers || [];
+        
+        // Tarihe göre sırala (Yeniden eskiye)
+        setHistory(deals.sort((a,b) => b.close_time - a.close_time));
+        setTransfers(trans.sort((a,b) => b.time - a.time));
       }
     });
 
     return () => { unsubAccount(); unsubPositions(); unsubHistory(); };
   }, []);
 
-  // --- ANALİZ HESAPLAMALARI ---
+  // --- ANALİZ VE GRAFİK HESAPLAMALARI ---
+  
+  // 1. EQUITY CURVE (Bakiye Büyüme Eğrisi) - İşlem Bazlı
+  // Mantık: Şu anki bakiyeden geriye doğru giderek her işlemin sonucunu çıkarıp geçmiş bakiyeleri buluyoruz.
+  const calculateEquityCurve = () => {
+    let currentBalance = account.balance;
+    const curve = [];
+
+    // En son durumu ekle
+    curve.push({ name: 'Şimdi', balance: currentBalance });
+
+    // Geçmiş işlemleri tersten gezerek bakiyeyi geri sar
+    // history dizisi [En Yeni ... En Eski] şeklinde sıralı.
+    history.forEach((trade, index) => {
+        // Şu anki bakiye buysa, bu işlemden önce bakiye neydi?
+        // Önceki Bakiye = Şu anki - (Net Kar)
+        currentBalance = currentBalance - trade.net_profit;
+        
+        curve.push({
+            name: `İşlem ${history.length - index}`, // İşlem numarası
+            balance: currentBalance
+        });
+    });
+
+    // Grafiği [Eski ... Yeni] şeklinde çevir
+    return curve.reverse(); 
+  };
+
+  const equityData = calculateEquityCurve();
+
+  // 2. Diğer Analizler
   const totalDeposit = transfers.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
   const totalWithdraw = transfers.filter(t => t.amount < 0).reduce((sum, t) => sum + Math.abs(t.amount), 0);
   
@@ -94,12 +134,6 @@ export default function App() {
   
   const avgWin = wins.length > 0 ? totalProfitVal / wins.length : 0;
   const avgLoss = losses.length > 0 ? totalLossVal / losses.length : 0;
-
-  // Grafik Verileri (Basit PnL Eğrisi)
-  const pnlData = history.slice(0, 30).reverse().map(t => ({
-    name: new Date(t.close_time * 1000).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-    pnl: t.net_profit
-  }));
 
   const pieData = [
     { name: 'Kazanç', value: wins.length, color: '#10b981' },
@@ -138,7 +172,7 @@ export default function App() {
                 <h1 className="text-lg font-bold text-white tracking-tight">CEO TRADER</h1>
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></span>
-                  <span className="text-[10px] text-emerald-400 font-medium tracking-wider">LIVE V2.0</span>
+                  <span className="text-[10px] text-emerald-400 font-medium tracking-wider">PRO TERMINAL</span>
                 </div>
               </div>
             </div>
@@ -183,11 +217,86 @@ export default function App() {
               <StatCard title="AÇIK İŞLEM" value={positions.length} subValue="Aktif Pozisyonlar" icon={Clock} color="amber" />
             </div>
 
+            {/* Main Dashboard Grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              
+              {/* Sol Taraf: Grafik (Geniş) */}
+              <div className="lg:col-span-2 bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg">
+                <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-white font-bold flex items-center gap-2">
+                        <TrendingUp className="text-emerald-400" size={20} /> 
+                        Büyüme Grafiği (Equity Curve)
+                    </h2>
+                    <span className="text-xs text-slate-500 bg-slate-900 px-2 py-1 rounded">İşlem Bazlı</span>
+                </div>
+                
+                <div className="h-[300px] w-full">
+                  {equityData.length > 1 ? (
+                    <ResponsiveContainer>
+                        <AreaChart data={equityData}>
+                        <defs>
+                            <linearGradient id="colorEq" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
+                            <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                            </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#334155" vertical={false} />
+                        <XAxis dataKey="name" hide />
+                        <YAxis domain={['auto', 'auto']} stroke="#64748b" tickFormatter={(val) => `$${val}`} width={60} />
+                        <Tooltip contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#fff' }} formatter={(value) => [`$${value.toFixed(2)}`, 'Bakiye']} />
+                        <Area type="monotone" dataKey="balance" stroke="#3b82f6" strokeWidth={3} fill="url(#colorEq)" />
+                        </AreaChart>
+                    </ResponsiveContainer>
+                  ) : (
+                      <div className="h-full flex flex-col items-center justify-center text-slate-500 border-2 border-dashed border-slate-700 rounded-lg">
+                          <Activity size={32} className="mb-2 opacity-50" />
+                          <span>Grafik için en az 1 işlem geçmişi gerekiyor</span>
+                          <span className="text-xs mt-1">Botunuz işlem kapattıkça burası dolacak.</span>
+                      </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Sağ Taraf: Son İşlemler Listesi (Dar) */}
+              <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-lg flex flex-col">
+                <div className="p-4 border-b border-slate-700 flex justify-between items-center bg-slate-800/50">
+                    <h3 className="text-white font-bold flex items-center gap-2"><List size={18} className="text-blue-400" /> Son Aktiviteler</h3>
+                </div>
+                <div className="flex-1 overflow-y-auto max-h-[300px]">
+                    <div className="divide-y divide-slate-700">
+                        {history.slice(0, 6).map((t, i) => (
+                             <div key={i} className="flex items-center justify-between p-3 hover:bg-slate-700/30 transition-colors">
+                                <div className="flex flex-col">
+                                    <span className="text-sm font-bold text-white">{t.symbol}</span>
+                                    <span className={`text-[10px] font-bold ${t.type === 'BUY' ? 'text-blue-400' : 'text-orange-400'}`}>{t.type}</span>
+                                </div>
+                                <div className="text-right">
+                                    <div className={`text-sm font-mono font-bold ${t.net_profit >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                        {t.net_profit >= 0 ? '+' : ''}{t.net_profit.toFixed(2)} $
+                                    </div>
+                                    <div className="text-[10px] text-slate-500">{fmtDate(t.close_time).split(' ')[1]}</div>
+                                </div>
+                             </div>
+                        ))}
+                        {history.length === 0 && (
+                            <div className="p-6 text-center text-slate-500 text-sm">
+                                Henüz kapanmış işlem verisi yok.
+                            </div>
+                        )}
+                    </div>
+                </div>
+                <div className="p-2 border-t border-slate-700 bg-slate-800/50 text-center">
+                    <button onClick={() => setActiveTab('history')} className="text-xs text-blue-400 hover:text-white transition-colors">Tüm Geçmişi Gör</button>
+                </div>
+              </div>
+
+            </div>
+
             {/* Active Positions Table */}
             <div className="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden shadow-lg">
               <div className="p-4 border-b border-slate-700 bg-slate-800/50"><h3 className="text-white font-bold">Açık İşlemler</h3></div>
               <div className="divide-y divide-slate-700">
-                {positions.length === 0 ? <div className="p-8 text-center text-slate-500">İşlem yok</div> : positions.map((pos, idx) => (
+                {positions.length === 0 ? <div className="p-8 text-center text-slate-500">Açık işlem yok</div> : positions.map((pos, idx) => (
                   <div key={idx} className="flex items-center justify-between p-4 hover:bg-slate-700/30">
                     <div className="flex items-center gap-3">
                        <div className={`w-1 h-8 rounded-full ${pos.type === 'BUY' ? 'bg-emerald-500' : 'bg-rose-500'}`}></div>
@@ -228,7 +337,7 @@ export default function App() {
                 </thead>
                 <tbody className="divide-y divide-slate-700">
                   {history.length === 0 ? (
-                     <tr><td colSpan="6" className="p-8 text-center">Henüz kapanmış işlem yok.</td></tr>
+                     <tr><td colSpan="6" className="p-8 text-center text-slate-500">Veri bekleniyor... (Botunuz işlem kapattı mı?)</td></tr>
                   ) : history.map((t, i) => (
                     <tr key={i} className="hover:bg-slate-700/30 transition-colors">
                       <td className="p-4 font-bold text-white">{t.symbol}</td>

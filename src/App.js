@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar } from 'recharts';
-import { LayoutDashboard, History, LineChart, Wallet, Clock, TrendingUp, TrendingDown, Menu, X, DollarSign, Activity, List, ArrowUp, ArrowDown, Filter, ChevronUp, ChevronDown, Calendar, Globe, BarChart2, PieChart as PieChartIcon, AlertTriangle } from 'lucide-react';
+import { LayoutDashboard, History, LineChart, Wallet, Clock, TrendingUp, TrendingDown, Menu, X, DollarSign, Activity, List, ArrowUp, ArrowDown, Filter, ChevronUp, ChevronDown, Calendar, Globe, BarChart2, PieChart as PieChartIcon, AlertTriangle, Layers } from 'lucide-react';
 
 // --- FIREBASE BAĞLANTISI ---
 import { initializeApp } from "firebase/app";
@@ -47,11 +47,11 @@ const fmtDate = (timestamp) => {
 
 // --- ORTAK TOOLTIP STİLİ ---
 const tooltipStyle = {
-    contentStyle: { backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f1f5f9', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' },
+    contentStyle: { backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f1f5f9', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.8)' },
     itemStyle: { color: '#f1f5f9' },
     labelStyle: { color: '#94a3b8', marginBottom: '0.25rem' }
 };
-const transparentCursor = { fill: 'rgba(255, 255, 255, 0.05)' }; 
+const transparentCursor = { fill: 'rgba(255, 255, 255, 0.03)' }; 
 
 // --- BİLEŞENLER ---
 
@@ -79,6 +79,7 @@ const MarketSessions = () => {
   );
 };
 
+// YENİLENMİŞ STAT CARD (Ghost Icon Design)
 const StatCard = ({ title, value, subValue, icon: Icon, color = "blue" }) => {
   const colorClasses = {
     blue: "text-blue-400 bg-blue-500/10 border-blue-500/20 group-hover:shadow-[0_0_20px_rgba(59,130,246,0.2)]",
@@ -88,17 +89,30 @@ const StatCard = ({ title, value, subValue, icon: Icon, color = "blue" }) => {
     amber: "text-amber-400 bg-amber-500/10 border-amber-500/20 group-hover:shadow-[0_0_20px_rgba(245,158,11,0.2)]"
   };
 
+  // Arka plan için ikon rengi
+  const ghostColors = {
+    blue: "text-blue-500",
+    emerald: "text-emerald-500",
+    rose: "text-rose-500",
+    purple: "text-purple-500",
+    amber: "text-amber-500"
+  };
+
   return (
-    <div className="glass-card p-5 rounded-xl flex flex-col justify-between hover:bg-slate-800/80 transition-all duration-300 hover:-translate-y-1 group">
-      <div className="flex justify-between items-start mb-2">
+    <div className="glass-card p-5 rounded-xl flex flex-col justify-between hover:bg-slate-800/80 transition-all duration-300 hover:-translate-y-1 group relative overflow-hidden h-[120px]">
+      
+      {/* Ghost Icon (Devasa Silik Arka Plan İkonu) */}
+      <div className={`absolute -right-6 -bottom-6 opacity-[0.05] pointer-events-none transform rotate-12 group-hover:scale-110 group-hover:opacity-[0.1] transition-all duration-500 ${ghostColors[color]}`}>
+        <Icon size={140} strokeWidth={1.5} />
+      </div>
+
+      <div className="flex justify-between items-start mb-2 relative z-10">
         <div className={`p-2.5 rounded-xl border transition-all duration-300 ${colorClasses[color]}`}>
           <Icon className="w-5 h-5" />
         </div>
-        <div className="flex gap-0.5 items-end h-6 opacity-30">
-           {[...Array(5)].map((_,i) => <div key={i} className={`w-1 rounded-t-sm transition-all duration-500 ${colorClasses[color].split(' ')[0].replace('text','bg')}`} style={{height: `${Math.random()*100}%`}}></div>)}
-        </div>
       </div>
-      <div>
+      
+      <div className="relative z-10">
         <h3 className="text-slate-400 text-[11px] font-bold uppercase tracking-wider mb-1 opacity-80">{title}</h3>
         <div className="text-2xl font-bold text-white tracking-tight drop-shadow-md">{value}</div>
         {subValue && <div className="text-xs text-slate-500 mt-1 font-medium">{subValue}</div>}
@@ -137,8 +151,8 @@ const LiveTicker = () => {
     return () => unsub();
   }, []);
 
-  const priceList = Object.entries(prices).map(([key, data]) => (
-    <span key={key} className="flex items-center gap-2 mx-6">
+  const renderPrices = (keySuffix) => Object.entries(prices).map(([key, data]) => (
+    <span key={`${key}-${keySuffix}`} className="flex items-center gap-2 mx-6">
       <span className="font-bold text-slate-300">{key}</span>
       <span className={`${data.dir > 0 ? 'text-emerald-400' : data.dir < 0 ? 'text-rose-400' : 'text-slate-400'} flex items-center font-mono`}>
         {data.val > 0 ? data.val.toFixed(2) : '---'}
@@ -150,10 +164,11 @@ const LiveTicker = () => {
   return (
     <div className="fixed bottom-0 w-full bg-[#0f172a]/95 backdrop-blur-xl border-t border-slate-800 h-6 flex items-center overflow-hidden z-50 shadow-[0_-5px_20px_rgba(0,0,0,0.5)]">
        <div className="flex animate-marquee whitespace-nowrap">
-          {priceList}
-          {priceList}
-          {priceList}
-          {priceList}
+          {[0, 1, 2, 3].map(i => (
+            <div key={i} className="flex">
+              {renderPrices(i)}
+            </div>
+          ))}
        </div>
        <style>{`
         .animate-marquee { animation: marquee 35s linear infinite; display: flex; }
@@ -218,22 +233,16 @@ export default function App() {
     return curve;
   }, [history, transfers]);
 
-  // YENİ GÜNLÜK PNL HESAPLAMASI (SMART PNL)
-  // Bugün kapananların karı + Şu an açık olanların anlık karı
   const dailyPnL = useMemo(() => {
     if (!history) return account.profit;
     const now = new Date();
-    // Bugünün başlangıcı (00:00:00)
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
     
-    // 1. Bugün kapanan (Realized)
     const realizedToday = history
       .filter(t => t.close_time >= startOfDay)
       .reduce((sum, t) => sum + t.net_profit, 0);
     
-    // 2. Açık olan (Floating - Unrealized)
     const floating = account.profit || 0;
-
     return realizedToday + floating;
   }, [history, account.profit]);
 
@@ -319,10 +328,22 @@ export default function App() {
       <header className="fixed top-0 w-full z-50 bg-[#0f172a]/80 backdrop-blur-xl border-b border-slate-800/60">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex justify-between items-center h-16">
+            
+            {/* --- LOGO VE BAŞLIK ALANI (GÜNCELLENDİ) --- */}
             <div className="flex items-center gap-3">
-              <div className="bg-gradient-to-tr from-blue-600 to-indigo-500 p-2 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.5)] transform hover:rotate-3 transition-transform cursor-pointer"><Activity className="w-5 h-5 text-white" /></div>
-              <div><h1 className="text-lg font-bold text-white tracking-tight leading-tight">TRADER DASH</h1><div className="flex items-center gap-2"><span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></span><span className="text-[10px] text-emerald-400 font-bold tracking-[0.2em] opacity-80">ARION MP.</span></div></div>
+              <div className="bg-gradient-to-tr from-blue-600 to-indigo-500 p-2 rounded-xl shadow-[0_0_20px_rgba(59,130,246,0.5)] transform hover:rotate-3 transition-transform cursor-pointer">
+                <Activity className="w-5 h-5 text-white" />
+              </div>
+              <div>
+                <h1 className="text-lg font-bold text-white tracking-tight leading-tight">TRADER DASH</h1>
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></span>
+                  <span className="text-[10px] text-emerald-400 font-bold tracking-[0.2em] opacity-80">ARION MP.</span>
+                </div>
+              </div>
             </div>
+            {/* ------------------------------------------- */}
+
             <div className="hidden md:flex bg-slate-900/50 p-1 rounded-xl border border-slate-700/50">
               {['dashboard', 'history', 'analysis'].map(tab => (
                 <button key={tab} onClick={() => setActiveTab(tab)} className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${activeTab === tab ? 'bg-blue-600 text-white shadow-[0_0_15px_rgba(37,99,235,0.5)] scale-105' : 'text-slate-400 hover:text-white hover:bg-slate-800'}`}>{tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
@@ -344,7 +365,7 @@ export default function App() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard title="VARLIK (EQUITY)" value={fmtMoney(account.equity)} subValue={`Bakiye: ${fmtMoney(account.balance)}`} icon={Wallet} color="blue" />
-              {/* DÜZELTİLEN KISIM: GÜNLÜK PNL */}
+              {/* Güncellenen PNL Kartı */}
               <StatCard title="GÜNLÜK PNL" value={fmtMoney(dailyPnL)} subValue="Gerçekleşen + Aktif Pozisyonlar" icon={DollarSign} color={dailyPnL >= 0 ? "emerald" : "rose"} />
               <StatCard title="MARGIN LEVEL" value={`%${parseFloat(account.margin_level).toFixed(0)}`} subValue={`Free: ${fmtMoney(account.free_margin)}`} icon={Activity} color="purple" />
               <StatCard title="AÇIK İŞLEM" value={positions.length} subValue="Aktif Pozisyonlar" icon={Clock} color="amber" />

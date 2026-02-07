@@ -45,13 +45,12 @@ const fmtDate = (timestamp) => {
   return new Date(timestamp * 1000).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute:'2-digit' });
 };
 
-// --- ORTAK TOOLTIP STİLİ (Siyah Kutu, Beyaz Yazı) ---
+// --- ORTAK TOOLTIP STİLİ ---
 const tooltipStyle = {
     contentStyle: { backgroundColor: '#0f172a', border: '1px solid #334155', color: '#f1f5f9', borderRadius: '8px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' },
     itemStyle: { color: '#f1f5f9' },
     labelStyle: { color: '#94a3b8', marginBottom: '0.25rem' }
 };
-// Gri arka planı yok eden özel cursor
 const transparentCursor = { fill: 'rgba(255, 255, 255, 0.05)' }; 
 
 // --- BİLEŞENLER ---
@@ -157,7 +156,6 @@ const LiveTicker = () => {
           {priceList}
        </div>
        <style>{`
-        /* Hız 35s yapıldı (%20+ Hızlandırıldı) */
         .animate-marquee { animation: marquee 35s linear infinite; display: flex; }
         @keyframes marquee { 0% { transform: translateX(0); } 100% { transform: translateX(-100%); } }
       `}</style>
@@ -219,6 +217,25 @@ export default function App() {
     }
     return curve;
   }, [history, transfers]);
+
+  // YENİ GÜNLÜK PNL HESAPLAMASI (SMART PNL)
+  // Bugün kapananların karı + Şu an açık olanların anlık karı
+  const dailyPnL = useMemo(() => {
+    if (!history) return account.profit;
+    const now = new Date();
+    // Bugünün başlangıcı (00:00:00)
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime() / 1000;
+    
+    // 1. Bugün kapanan (Realized)
+    const realizedToday = history
+      .filter(t => t.close_time >= startOfDay)
+      .reduce((sum, t) => sum + t.net_profit, 0);
+    
+    // 2. Açık olan (Floating - Unrealized)
+    const floating = account.profit || 0;
+
+    return realizedToday + floating;
+  }, [history, account.profit]);
 
   const analysisData = useMemo(() => {
       const wins = history.filter(t => t.net_profit > 0);
@@ -327,7 +344,8 @@ export default function App() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
               <StatCard title="VARLIK (EQUITY)" value={fmtMoney(account.equity)} subValue={`Bakiye: ${fmtMoney(account.balance)}`} icon={Wallet} color="blue" />
-              <StatCard title="GÜNLÜK PNL" value={fmtMoney(account.profit)} subValue="Açık Pozisyonlar Dahil" icon={DollarSign} color={account.profit >= 0 ? "emerald" : "rose"} />
+              {/* DÜZELTİLEN KISIM: GÜNLÜK PNL */}
+              <StatCard title="GÜNLÜK PNL" value={fmtMoney(dailyPnL)} subValue="Gerçekleşen + Aktif Pozisyonlar" icon={DollarSign} color={dailyPnL >= 0 ? "emerald" : "rose"} />
               <StatCard title="MARGIN LEVEL" value={`%${parseFloat(account.margin_level).toFixed(0)}`} subValue={`Free: ${fmtMoney(account.free_margin)}`} icon={Activity} color="purple" />
               <StatCard title="AÇIK İŞLEM" value={positions.length} subValue="Aktif Pozisyonlar" icon={Clock} color="amber" />
             </div>
